@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.embeddedhtml": "html",
+    "*.jsp": "jsp",
+    "typedefs.h": "c"
+  }
+}
