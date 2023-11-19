@@ -1,13 +1,13 @@
 ## Overview
-Chess engine written in C. Can be connected to a UCI compatible GUI.
+Hexagoanl Chess engine written in C.
 
 ## Features
 - No opening book
 - Single Piece-Square Table Evaluation
-- Magic numbers for bishops and rooks
 - Configurable alpha-beta search depth
 - Stale game evaluation
-- Castle and en passant
+- No Castling in Hex Chess 
+- En passant
 
 ## Attributions
 Heaviliy based of the following documentation and code:
@@ -16,3 +16,11 @@ Heaviliy based of the following documentation and code:
 - https://github.com/Sopel97/FatTitz
 - https://github.com/abhigyan7/chess
 - https://github.com/kz04px/Baislicka
+
+- https://stackoverflow.com/questions/1838656/how-do-i-represent-a-hextile-hex-grid-in-memory
+- http://www-cs-students.stanford.edu/~amitp/game-programming/grids/
+- https://github.com/theonlytechnohead/Hexchess
+- https://github.com/TwistedTornado/hexagonal-chess
+
+Introduction bt CGP Grey
+- https://www.youtube.com/watch?v=bgR3yESAEVE
