@@ -8,6 +8,7 @@ Hexagoanl Chess engine written in C.
 - Stale game evaluation
 - No Castling in Hex Chess 
 - En passant
+- ASCII display
 
 ## Attributions
 Heaviliy based of the following documentation and code:
@@ -22,5 +23,5 @@ Heaviliy based of the following documentation and code:
 - https://github.com/theonlytechnohead/Hexchess
 - https://github.com/TwistedTornado/hexagonal-chess
 
-Introduction bt CGP Grey
+Introduction by CGP Grey
 - https://www.youtube.com/watch?v=bgR3yESAEVE
