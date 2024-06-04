@@ -1,5 +1,8 @@
+## Rules and information
+https://en.wikipedia.org/wiki/Hexagonal_chess
+
 ## Overview
-Hexagoanl Chess engine written in C.
+Hexagoanl Chess engine and playable board written in C.
 
 ## Features
 - No opening book
@@ -22,6 +25,7 @@ Heaviliy based of the following documentation and code:
 - http://www-cs-students.stanford.edu/~amitp/game-programming/grids/
 - https://github.com/theonlytechnohead/Hexchess
 - https://github.com/TwistedTornado/hexagonal-chess
+- https://github.com/aclap-dev/jocly
 
 Introduction by CGP Grey
 - https://www.youtube.com/watch?v=bgR3yESAEVE
