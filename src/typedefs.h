@@ -1,13 +1,32 @@
 #ifndef TYPEDEFS_H
 #define TYPEDEFS_H
 
-#define BLACK 0
-#define WHITE 1
-
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef uint64_t Bitboard;
+#define BLACK 0
+#define WHITE 1
+
+// Gliński's hexagonal chess: a hexagon of radius 5 -> 91 cells.
+#define NUM_SQUARES 91
+#define HEX_RADIUS 5
+
+/**
+ * A bitboard for the 91-cell hex board.
+ * Bits 0..63 live in `lo`, bits 64..90 in `hi` (27 bits used).
+ * The whole engine uses this single 128-bit type; there is no 64-bit board.
+ */
+typedef struct {
+    uint64_t lo;
+    uint64_t hi;
+} Bitboard;
+
+/** A single board cell, addressed by cube coordinates (q + r + s == 0). */
+typedef struct {
+    int q, r, s;
+    char name[4]; // algebraic name, e.g. "f6", "l11"
+} Cell;
+
 typedef struct {
     Bitboard pawn_w;
     Bitboard knight_w;
@@ -21,9 +40,8 @@ typedef struct {
     Bitboard rook_b;
     Bitboard queen_b;
     Bitboard king_b;
-    int turn;
-    int castling;
-    int epSquare;
+    int turn;          // WHITE or BLACK
+    int epSquare;      // en passant target square, or -1 (no castling in hex chess)
     int halfmoves;
     int fullmoves;
     int whiteKingSq;
@@ -31,16 +49,15 @@ typedef struct {
     Bitboard occupancy;
     Bitboard occupancyWhite;
     Bitboard occupancyBlack;
-    Bitboard hash;
-    Bitboard attacks; // The attack mask of the other side, i.e. when it's white's turn, this is the black attack mask
+    uint64_t hash;     // Zobrist hash (64 bits is plenty)
+    Bitboard attacks;  // attack mask of the side NOT to move
 } Board;
 
 typedef struct {
     int fromSquare;
     int toSquare;
-    int promotion;
-    int castle;
-    int validation;
+    int promotion;   // promoted piece type, or -1
+    int validation;  // NOT_VALIDATED / LEGAL / ILLEGAL
     int pieceType;
     int score;
     bool exhausted;
@@ -48,28 +65,12 @@ typedef struct {
 
 enum PIECES {
     PAWN_W, KNIGHT_W, BISHOP_W, ROOK_W, QUEEN_W, KING_W,
-    PAWN_B, KNIGHT_B, BISHOP_B, ROOK_B, QUEEN_B, KING_B
+    PAWN_B, KNIGHT_B, BISHOP_B, ROOK_B, QUEEN_B, KING_B,
+    NO_PIECE = -1
 };
 
-enum SQUARES {
-    H1, G1, F1, E1, D1, C1, B1, A1,
-    H2, G2, F2, E2, D2, C2, B2, A2,
-    H3, G3, F3, E3, D3, C3, B3, A3,
-    H4, G4, F4, E4, D4, C4, B4, A4,
-    H5, G5, F5, E5, D5, C5, B5, A5,
-    H6, G6, F6, E6, D6, C6, B6, A6,
-    H7, G7, F7, E7, D7, C7, B7, A7,
-    H8, G8, F8, E8, D8, C8, B8, A8
-};
+enum MOVE_VALIDATION { NOT_VALIDATED, LEGAL, ILLEGAL };
 
-enum MOVE_VALIDAITON {NOT_VALIDATED, LEGAL, ILLEGAL};
-
-enum GAME_RESULT {UN_DETERMINED, WHITE_WIN, BLACK_WIN, DRAW};
-
-enum CASTLING {K=1, Q=2, k=4, q=8};
-
-enum FILES {H, G, F, E, D, C, B, A};
-
-extern char SQUARES[64][3];
+enum GAME_RESULT { UN_DETERMINED, WHITE_WIN, BLACK_WIN, DRAW };
 
 #endif

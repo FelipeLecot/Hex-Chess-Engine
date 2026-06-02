@@ -1,83 +1,79 @@
+#include <stdbool.h>
 #include "evaluatemove.h"
+#include "board.h"
 #include "bitboards.h"
 
-const int VICTIM_PIECES[] = {
-    100 * 16,
-    320 * 16,
-    330 * 16,
-    500 * 16,
-    900 * 16,
+static const int VICTIM_VALUES[6] = {
+    100*16, 320*16, 330*16, 500*16, 900*16, 20000*16
 };
-const int ATTACKING_PIECES[] = {
-    100,
-    200,
-    300,
-    400,
-    500,
-    600,
-    100, 200, 300, 400, 500, 600,
+static const int ATTACKER_VALUES[12] = {
+    100, 320, 330, 500, 900, 20000,
+    100, 320, 330, 500, 900, 20000
 };
+static const int MAX_MOVE_SCORE   = 1000;
+static const int PAWN_EXCHANGE    = (100*16) - 100;
 
-const int MAX_MOVE_SCORE = 1000;
-const int PAWN_EXCHANGE_VALUE = (100 * 16) - 100; // Max value victim piece - min value attacking piece
-
-bool both_moves_are_equal(Move a, Move b);
+static bool movesEqual(Move a, Move b) {
+    return a.fromSquare == b.fromSquare
+        && a.toSquare   == b.toSquare
+        && a.promotion  == b.promotion;
+}
 
 void score_moves(Board board, TTEntry entry, Move moves[], int cmoves) {
     Move pvMove;
-    if (board.hash == entry.zobrist && entry.nodeType < UPPER) {
+    bool hasPV = false;
+    if (entry.zobrist == board.hash && entry.nodeType < UPPER) {
         pvMove = entry.move;
+        hasPV  = true;
     }
 
+    Bitboard enemyOcc = board.turn ? board.occupancyBlack : board.occupancyWhite;
+
     for (int i = 0; i < cmoves; i++) {
-        Move* move = &moves[i];
+        Move *m = &moves[i];
 
-        if (both_moves_are_equal(pvMove, *move)) {
-            move->score = MAX_MOVE_SCORE;
-        } else {
-            Bitboard enemyOcc = board.turn ? board.occupancyBlack : board.occupancyWhite;
-            bool isCapture = enemyOcc & SQUARE_BITBOARDS[move->toSquare];
-            bool isEnPassant = board.epSquare == move->toSquare;
+        if (hasPV && movesEqual(pvMove, *m)) {
+            m->score = MAX_MOVE_SCORE;
+            continue;
+        }
 
-            if (isEnPassant) {
-                moves[i].score = PAWN_EXCHANGE_VALUE;
-            } else if (isCapture) {
-                // Find type of captured piece
-                int capturedPiece;
-                Bitboard toSquare = SQUARE_BITBOARDS[moves[i].toSquare];
-                Bitboard* bb = board.turn ? &board.pawn_b : &board.pawn_w;
-                for (int i = 0; i < 5; i++) {
-                    if (toSquare & *bb) {
-                        capturedPiece = i;
-                        break;
-                    }
-                    bb++;
+        bool isEp      = (board.epSquare == m->toSquare);
+        bool isCapture = bbGet(enemyOcc, m->toSquare);
+
+        if (isEp) {
+            m->score = PAWN_EXCHANGE;
+        } else if (isCapture) {
+            // Find captured piece type
+            int capPiece = 0;
+            int opStart  = board.turn ? PAWN_B : PAWN_W;
+            for (int p = 0; p < 6; p++) {
+                if (bbGet(*pieceBB((Board*)&board, opStart + p), m->toSquare)) {
+                    capPiece = p;
+                    break;
                 }
-
-                move->score = VICTIM_PIECES[capturedPiece] - ATTACKING_PIECES[move->pieceType];
             }
+            m->score = VICTIM_VALUES[capPiece] - ATTACKER_VALUES[m->pieceType];
+        } else {
+            m->score = 0;
         }
     }
 }
 
 int select_move(Move moves[], int cmoves) {
-    int bestScore = 0;
-    int indx = -1;
-
+    int best = -1;
+    int bestScore = -1;
     for (int i = 0; i < cmoves; i++) {
-        if (!moves[i].exhausted && moves[i].score >= bestScore) {
+        if (!moves[i].exhausted && moves[i].score > bestScore) {
             bestScore = moves[i].score;
-            indx = i;
+            best = i;
         }
     }
-
-    if (indx != -1) {
-        moves[indx].exhausted = true;
+    // Fall back to any un-exhausted move if none scored > -1
+    if (best == -1) {
+        for (int i = 0; i < cmoves; i++) {
+            if (!moves[i].exhausted) { best = i; break; }
+        }
     }
-
-    return indx;
-}
-
-bool both_moves_are_equal(Move a, Move b) {
-    return a.fromSquare == b.fromSquare && a.toSquare == b.toSquare && a.promotion == b.promotion;
+    if (best >= 0) moves[best].exhausted = true;
+    return best;
 }

@@ -3,9 +3,10 @@
 
 #include "typedefs.h"
 
-extern int MAX_EVAL;
-extern int MIN_EVAL;
+#define MAX_EVAL  1000000
+#define MIN_EVAL (-1000000)
 
 void initEvaluation(void);
-int evaluate(Board board, int result);
+int evaluate(Board board, int gameResult);
+
 #endif

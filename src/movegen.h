@@ -1,26 +1,17 @@
 #ifndef MOVEGEN_H
 #define MOVEGEN_H
 
-#include <stdbool.h>
 #include "typedefs.h"
-#include "magics.h"
 
-extern Bitboard PAWN_START_WHITE;
-extern Bitboard PAWN_START_BLACK;
-extern Bitboard PAWN_W_ATTACKS_EAST[64];
-extern Bitboard PAWN_W_ATTACKS_WEST[64];
-extern Bitboard PAWN_B_ATTACKS_EAST[64];
-extern Bitboard PAWN_B_ATTACKS_WEST[64];
-extern Bitboard KNIGHT_MOVEMENT[64];
-extern Bitboard BISHOP_MOVEMENT[64];
-extern Bitboard ROOK_MOVEMENT[64];
-extern Bitboard KING_MOVEMENT[64];
+// Generates all legal moves for the side to move.
+// Returns the count of legal moves written to `moves`.
+int legalMoves(Board *board, Move moves[]);
 
-void initMoveGeneration(void);
-int legalMoves(Board* board, Move moves[]);
-int bitScanForward(Bitboard* bb);
+// Returns whether `square` is attacked by any piece of the side NOT to move.
 bool isSquareAttacked(Board board, int square);
-Bitboard getRookAttacks(int square, Bitboard occupancy);
-Bitboard getBishopAttacks(int square, Bitboard occupancy);
+
+// Computes the full attack mask of the side NOT to move
+// (used for checks, pins, ep legality, and board.attacks).
+Bitboard computeAttacks(Board board);
 
 #endif

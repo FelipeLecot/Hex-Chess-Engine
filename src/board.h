@@ -3,15 +3,23 @@
 
 #include "typedefs.h"
 #include "bitboards.h"
+#include "coords.h"
 
-#define getBit(bitboard, square) (bitboard & SQUARE_BITBOARDS[square])
-#define popBit(bitboard, square) (bitboard & ~SQUARE_BITBOARDS[square])
-#define setBit(bitboard, square) bitboard | SQUARE_BITBOARDS[square]
-#define toggleBit(bitboard, square) (bitboard ^ SQUARE_BITBOARDS[square])
+// ── occupancy ────────────────────────────────────────────────────────────────
+void computeOccupancyMasks(Board *board);
 
-int result(Board board, Move pseudoLegal[], int length);
-void computeOccupancyMasks(Board* board);
+// ── board operations ─────────────────────────────────────────────────────────
+void pushMove(Board *board, Move move);
+
+// ── game result ──────────────────────────────────────────────────────────────
+// Returns UN_DETERMINED, WHITE_WIN, BLACK_WIN, or DRAW.
+int result(Board board, Move legal[], int count);
+
+// ── debug display ─────────────────────────────────────────────────────────────
 void printBoard(Board board);
-void pushMove(Board* board, Move move);
+
+// ── piece-bitboard access (0-based piece enum offset from pawn_w) ─────────────
+// Returns a pointer to the bitboard for piece i in board.
+Bitboard *pieceBB(Board *board, int pieceType);
 
 #endif

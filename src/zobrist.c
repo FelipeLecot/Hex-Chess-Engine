@@ -1,57 +1,39 @@
 #include <stdlib.h>
 #include "zobrist.h"
+#include "board.h"
 
-Bitboard randomBitboard();
+uint64_t PIECES[12][NUM_SQUARES];
+uint64_t EN_PASSANT[NUM_SQUARES];
+uint64_t WHITE_TO_MOVE;
 
-// https://www.chessprogramming.org/Zobrist_Hashing
+static uint64_t randU64(void) {
+    // Mix four rand() calls (each gives at least 15 bits) to fill 64 bits.
+    return ((uint64_t)rand() << 48)
+         ^ ((uint64_t)rand() << 32)
+         ^ ((uint64_t)rand() << 16)
+         ^  (uint64_t)rand();
+}
 
-Bitboard WHITE_MOVE;
-Bitboard ENPASSANT[64];
-Bitboard CASTLE[16];
-Bitboard PIECES[12][64];
+void initZobrist(void) {
+    for (int p = 0; p < 12; p++)
+        for (int s = 0; s < NUM_SQUARES; s++)
+            PIECES[p][s] = randU64();
+    for (int s = 0; s < NUM_SQUARES; s++)
+        EN_PASSANT[s] = randU64();
+    WHITE_TO_MOVE = randU64();
+}
 
-Bitboard hash(Board board) {
-    Bitboard hash = 0LL;
-
-    // Castling rights
-    hash ^= CASTLE[board.castling];
-
-    // Pieces
-    for (int i = 0; i < 12; i++) {
-        Bitboard bb = *(&(board.pawn_w)+i);
-
-        while (bb) {
-            int square = __builtin_ctzll(bb);
-            hash ^= PIECES[i][square];
-            bb &= bb -1;
+uint64_t computeHash(Board board) {
+    uint64_t h = 0;
+    for (int p = 0; p < 12; p++) {
+        Bitboard bb = *pieceBB(&board, p);
+        for (; !bbEmpty(bb);) {
+            int sq = bbLsb(bb);
+            h ^= PIECES[p][sq];
+            bb = bbClear(bb, sq);
         }
     }
-
-    // En passant
-    if (board.epSquare != -1) {
-        hash ^= ENPASSANT[board.epSquare];
-    }
-
-    // Side to move
-    if (board.turn) {
-        hash ^= WHITE_MOVE;
-    }
-
-    return hash;
-}
-
-void initZobrist() {
-    for (int i = 0; i < 12; i++) for (int j = 0; j < 64;j++) PIECES[i][j] = randomBitboard();
-    for (int i = 0; i < 64; i++) ENPASSANT[i] = randomBitboard();
-    for (int i = 0; i < 16; i++) CASTLE[i] = randomBitboard();
-    WHITE_MOVE = randomBitboard();
-}
-
-Bitboard randomBitboard(void) {
-    Bitboard r = 0;
-    for (int i=0; i < 64; i++) {
-        Bitboard tmp = (Bitboard) rand() % 2;
-        r |= tmp << i;
-    }
-    return r;
+    if (board.epSquare >= 0) h ^= EN_PASSANT[board.epSquare];
+    if (board.turn == WHITE) h ^= WHITE_TO_MOVE;
+    return h;
 }

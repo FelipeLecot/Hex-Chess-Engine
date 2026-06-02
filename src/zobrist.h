@@ -3,12 +3,16 @@
 
 #include "typedefs.h"
 
-extern Bitboard PIECES[12][64];
-extern Bitboard EN_PASSANT[64];
-extern Bitboard CASTLING[16];
-extern Bitboard WHITE_TO_MOVE;
+// Random 64-bit keys for each piece on each square.
+extern uint64_t PIECES[12][NUM_SQUARES];
+// Random key for each possible en-passant square.
+extern uint64_t EN_PASSANT[NUM_SQUARES];
+// Toggled when it's white's turn.
+extern uint64_t WHITE_TO_MOVE;
 
 void initZobrist(void);
-Bitboard hash(Board board);
+
+// Full hash computation from scratch (used during FEN loading).
+uint64_t computeHash(Board board);
 
 #endif

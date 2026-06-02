@@ -1,14 +1,12 @@
 #include "bitboards.h"
 
-Bitboard SQUARE_BITBOARDS[64];
-Bitboard RANK_1 = 0xFF00;
-Bitboard RANK_7 = 0x00FF000000000000;
-
-// https://www.chessprogramming.org/Bitboards
+Bitboard SQUARE_BITBOARDS[NUM_SQUARES];
 
 void initBitboards(void) {
-    for (int i = 0; i < 64; i++) {
-        Bitboard bb = 1ULL << i;
-        SQUARE_BITBOARDS[i] = bb;
+    for (int i = 0; i < NUM_SQUARES; i++) {
+        Bitboard b = {0, 0};
+        if (i < 64) b.lo = 1ULL << i;
+        else        b.hi = 1ULL << (i - 64);
+        SQUARE_BITBOARDS[i] = b;
     }
 }

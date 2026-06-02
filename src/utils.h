@@ -4,7 +4,5 @@
 #include "typedefs.h"
 
 void printMoves(Move moves[], int length);
-void printBitboard(Bitboard bb);
-void printBits(Bitboard bb);
 
 #endif

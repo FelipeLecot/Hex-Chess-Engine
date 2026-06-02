@@ -1,294 +1,205 @@
-#include <stdbool.h>
-#include <inttypes.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 #include "board.h"
-#include "movegen.h"
 #include "zobrist.h"
-#include "utils.h"
 
-#define TWO_RANKS 16
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-char SQUARES[64][3] = {
-    "h1", "g1", "f1", "e1", "d1", "c1", "b1", "a1",
-    "h2", "g2", "f2", "e2", "d2", "c2", "b2", "a2",
-    "h3", "g3", "f3", "e3", "d3", "c3", "b3", "a3",
-    "h4", "g4", "f4", "e4", "d4", "c4", "b4", "a4",
-    "h5", "g5", "f5", "e5", "d5", "c5", "b5", "a5",
-    "h6", "g6", "f6", "e6", "d6", "c6", "b6", "a6",
-    "h7", "g7", "f7", "e7", "d7", "c7", "b7", "a7",
-    "h8", "g8", "f8", "e8", "d8", "c8", "b8", "a8"
-};
-
-char CASTLING_RIGHTS[4][2] = { "K", "Q", "k", "q" };
-
-int ALL_CASTLE_W = 0b0011;
-int ALL_CASTLE_B = 0b1100;
-
-bool isInsufficientMaterial(Board board) {
-    if (board.pawn_w || board.pawn_b || board.rook_w || board.rook_b || board.queen_w || board.queen_b) {
-        return false;
-    }
-
-    int knights = 0;
-    int bishops = 0;
-    Bitboard knightsBB = board.knight_w | board.knight_b;
-    Bitboard bishopsBB = board.bishop_w | board.bishop_b;
-    while (knightsBB) {
-        knightsBB &= knightsBB - 1;
-        knights++;
-    }
-    while (bishopsBB) {
-        bishopsBB &= bishopsBB - 1;
-        bishops++;
-    }
-
-    if (!bishops && knights) return true;       // KN or KNN vs K
-    if (!knights && bishops == 1) return true;  // KB vs K
-
-    return false;
+Bitboard *pieceBB(Board *board, int pieceType) {
+    return &board->pawn_w + pieceType;
 }
 
-/**
- * The game result
-*/
-int result(Board board, Move legal[], int length) {
-    if (isInsufficientMaterial(board)) {
-        return DRAW;
-    }
+void computeOccupancyMasks(Board *board) {
+    board->occupancyWhite = bbOr(bbOr(bbOr(bbOr(bbOr(
+        board->pawn_w, board->knight_w), board->bishop_w),
+        board->rook_w), board->queen_w), board->king_w);
 
-    bool noLegalMoves = length == 0;
+    board->occupancyBlack = bbOr(bbOr(bbOr(bbOr(bbOr(
+        board->pawn_b, board->knight_b), board->bishop_b),
+        board->rook_b), board->queen_b), board->king_b);
 
-    if (noLegalMoves) {
-        Bitboard kingInCheck = SQUARE_BITBOARDS[board.turn ? board.whiteKingSq : board.blackKingSq] && board.attacks;
-        if (kingInCheck) {
-            return board.turn ? BLACK_WIN : WHITE_WIN;
+    board->occupancy = bbOr(board->occupancyWhite, board->occupancyBlack);
+}
+
+// ── capture helper ────────────────────────────────────────────────────────────
+
+// Remove any opponent piece on `sq`. Piece loop starts at the opponent's pawn.
+static void removeCapturedPiece(Board *board, int sq) {
+    int start = board->turn ? PAWN_B : PAWN_W;
+    for (int i = 0; i < 6; i++) {
+        Bitboard *bb = pieceBB(board, start + i);
+        if (bbGet(*bb, sq)) {
+            board->hash ^= PIECES[start + i][sq];
+            *bb = bbClear(*bb, sq);
+            return;
         }
+    }
+}
 
-        return DRAW;
+// ── en-passant move ───────────────────────────────────────────────────────────
+
+static void makeEnPassantMove(Board *board, Move move) {
+    // The pawn we are capturing sits on a different square than toSquare.
+    // In hex chess, white pawns move "north" (s decreases) and black "south".
+    // The captured pawn is on move.toSquare shifted one step backward.
+    // We store epSquare as the destination of the moving pawn, and the
+    // captured pawn is found by tracing one step in the attacker's backward direction.
+    //
+    // Hex ep: the captured pawn lives one step behind the toSquare (behind the
+    // mover's direction). "North" for white is rook direction 0 (dq=1,dr=-1,ds=0)
+    // viewed from the captured pawn's side. We find the captured pawn by scanning
+    // opponent pawns adjacent to the ep square.
+    Cell *to = &CELLS[move.toSquare];
+
+    // The captured pawn is on epCapturedSq: the opponent pawn adjacent to toSquare
+    // that moved two squares last turn. It was stored when the double-push happened.
+    // Rather than re-derive direction here, we walk all 6 rook neighbors of toSquare
+    // and remove the first opponent pawn we find.
+    int captureSq = -1;
+    Bitboard *opPawns = board->turn ? &board->pawn_b : &board->pawn_w;
+    for (int d = 0; d < 6 && captureSq == -1; d++) {
+        int nq = to->q + ROOK_DIRS[d][0];
+        int nr = to->r + ROOK_DIRS[d][1];
+        int ns = to->s + ROOK_DIRS[d][2];
+        int ni = cubeToIndex(nq, nr, ns);
+        if (ni >= 0 && bbGet(*opPawns, ni)) {
+            captureSq = ni;
+        }
     }
 
-    return UN_DETERMINED;
-}
+    if (captureSq >= 0) {
+        int opPawnType = board->turn ? PAWN_B : PAWN_W;
+        board->hash ^= PIECES[opPawnType][captureSq];
+        *opPawns = bbClear(*opPawns, captureSq);
+    }
 
-void computeOccupancyMasks(Board* board) {
-    board->occupancyWhite = board->pawn_w | board->knight_w | board->bishop_w | board->rook_w | board->queen_w | board->king_w;
-    board->occupancyBlack = board->pawn_b | board->knight_b | board->bishop_b | board->rook_b | board->queen_b | board->king_b;
-    board->occupancy = board->occupancyBlack | board->occupancyWhite;
-}
+    int myPawnType = board->turn ? PAWN_W : PAWN_B;
+    Bitboard *myPawns = board->turn ? &board->pawn_w : &board->pawn_b;
 
-void makeEnPassantMove(Board* board, Move move) {
-    int capturedSquare = board->epSquare + (board->turn ? -8 : 8);
-
+    board->hash ^= PIECES[myPawnType][move.fromSquare];
+    board->hash ^= PIECES[myPawnType][move.toSquare];
     board->hash ^= EN_PASSANT[board->epSquare];
-    board->hash ^= PIECES[move.pieceType][move.fromSquare];
-    board->hash ^= PIECES[move.pieceType][move.toSquare];
-    board->hash ^= PIECES[board->turn ? PAWN_B : PAWN_W][capturedSquare];
-    board->hash ^= WHITE_TO_MOVE;
 
-    Bitboard* friendlyPawns = board->turn ? &(board->pawn_w) : &(board->pawn_b);
-    Bitboard* opponentPawns = board->turn ? &(board->pawn_b) : &(board->pawn_w);
-
-    // Capture the pawn
-    *opponentPawns = toggleBit(*opponentPawns, capturedSquare);
-
-    // Move the pawn that takes
-    *friendlyPawns = toggleBit(*friendlyPawns, move.fromSquare);
-    *friendlyPawns = setBit(*friendlyPawns, board->epSquare);
+    *myPawns = bbClear(*myPawns, move.fromSquare);
+    *myPawns = bbSet(*myPawns, move.toSquare);
 
     board->epSquare = -1;
-    board->turn = board->turn ? 0 : 1;
+    board->turn ^= 1;
+    board->hash ^= WHITE_TO_MOVE;
     computeOccupancyMasks(board);
 }
 
-void makeCastleMove(Board* board, Move move) {
-    if (move.castle == K) {
-        board->hash ^= PIECES[KING_W][E1];
-        board->hash ^= PIECES[KING_W][G1];
-        board->hash ^= PIECES[ROOK_W][H1];
-        board->hash ^= PIECES[ROOK_W][F1];
-        board->king_w = board->king_w >> 2;
-        board->rook_w = toggleBit(board->rook_w, H1);
-        board->rook_w = setBit(board->rook_w, F1);
-        board->whiteKingSq = G1;
-    } else if (move.castle == Q) {
-        board->hash ^= PIECES[KING_W][E1];
-        board->hash ^= PIECES[KING_W][C1];
-        board->hash ^= PIECES[ROOK_W][A1];
-        board->hash ^= PIECES[ROOK_W][D1];
-        board->king_w = board->king_w << 2;
-        board->rook_w = toggleBit(board->rook_w, A1);
-        board->rook_w = setBit(board->rook_w, D1);
-        board->whiteKingSq = C1;
-    } else if (move.castle == k) {
-        board->hash ^= PIECES[KING_B][E8];
-        board->hash ^= PIECES[KING_B][G8];
-        board->hash ^= PIECES[ROOK_B][H8];
-        board->hash ^= PIECES[ROOK_B][F8];
-        board->king_b = board->king_b >> 2;
-        board->rook_b = toggleBit(board->rook_b, H8);
-        board->rook_b = setBit(board->rook_b, F8);
-        board->blackKingSq = G8;
-    } else if (move.castle == q) {
-        board->hash ^= PIECES[KING_B][E8];
-        board->hash ^= PIECES[KING_B][C8];
-        board->hash ^= PIECES[ROOK_B][A8];
-        board->hash ^= PIECES[ROOK_B][D8];
-        board->king_b = board->king_b << 2;
-        board->rook_b = toggleBit(board->rook_b, A8);
-        board->rook_b = setBit(board->rook_b, D8);
-        board->blackKingSq = C8;
-    }
+// ── main move executor ────────────────────────────────────────────────────────
 
-    if (board->epSquare != -1) {
-        board->hash ^= EN_PASSANT[board->epSquare];
-    }
+void pushMove(Board *board, Move move) {
+    bool isEp = (move.toSquare == board->epSquare)
+             && (move.pieceType == PAWN_W || move.pieceType == PAWN_B);
 
-    board->hash ^= WHITE_TO_MOVE;
-    board->hash ^= CASTLING[board->castling];
-
-    // Update castling rights
-    board->castling &= board->turn ? ALL_CASTLE_B : ALL_CASTLE_W;
-    board->hash ^= CASTLING[board->castling];
-
-    computeOccupancyMasks(board);
-    board->epSquare = -1;
-    board->turn = board->turn ? 0 : 1;
-}
-
-void pushMove(Board* board, Move move) {
-    bool isEnPassantMove = move.toSquare==board->epSquare && (move.pieceType == PAWN_W || move.pieceType == PAWN_B);
-    if (isEnPassantMove) {
+    if (isEp) {
         makeEnPassantMove(board, move);
         return;
-    } 
-    
-    if (move.castle) {
-        makeCastleMove(board, move); 
-        return;
     }
 
-    // Update hash
+    // XOR out ep square if any
+    if (board->epSquare >= 0) {
+        board->hash ^= EN_PASSANT[board->epSquare];
+        board->epSquare = -1;
+    }
+
     board->hash ^= PIECES[move.pieceType][move.fromSquare];
     board->hash ^= WHITE_TO_MOVE;
-    board->hash ^= CASTLING[board->castling]; // XOR out old castling rights
-    if (board->epSquare != -1) {              // XOR out potential ep square
-        board->hash ^= EN_PASSANT[board->epSquare];
-    }
 
-    // Set potential ep-square
-    board->epSquare = -1;
-    bool starterPawnMoved = (move.pieceType == PAWN_W && (move.fromSquare > A1 && move.fromSquare < H3)) ||
-                            (move.pieceType == PAWN_B && (move.fromSquare > A6 && move.fromSquare < H8));
-    if (starterPawnMoved) {
-        int distanceCovered = abs(move.fromSquare - move.toSquare);
-        if (distanceCovered == TWO_RANKS) {
-            board->epSquare = board->turn ? move.fromSquare + 8 : move.fromSquare - 8;
+    // Lift the piece
+    Bitboard *moved = pieceBB(board, move.pieceType);
+    *moved = bbClear(*moved, move.fromSquare);
+
+    // Detect pawn double-push for en passant
+    if (move.pieceType == PAWN_W || move.pieceType == PAWN_B) {
+        Cell *from = &CELLS[move.fromSquare];
+        Cell *to   = &CELLS[move.toSquare];
+        // A double-push in hex moves 2 steps in the same rook direction.
+        // We record the ep square only when from and to differ by exactly 2 rook steps.
+        int dq = to->q - from->q, dr = to->r - from->r, ds = to->s - from->s;
+        bool doublePush = false;
+        for (int d = 0; d < 6; d++) {
+            if (dq == ROOK_DIRS[d][0]*2 && dr == ROOK_DIRS[d][1]*2 && ds == ROOK_DIRS[d][2]*2) {
+                doublePush = true;
+                board->epSquare = cubeToIndex(from->q + ROOK_DIRS[d][0],
+                                              from->r + ROOK_DIRS[d][1],
+                                              from->s + ROOK_DIRS[d][2]);
+                break;
+            }
+        }
+        if (doublePush && board->epSquare >= 0) {
+            board->hash ^= EN_PASSANT[board->epSquare];
         }
     }
 
-    // Update hash with the new ep square
-    if (board->epSquare != -1) {
-        board->hash ^= EN_PASSANT[board->epSquare];
-    }
+    // Remove any captured opponent piece
+    removeCapturedPiece(board, move.toSquare);
 
-    // Make move
-    Bitboard friendlyRooks = board->turn ? board->rook_w : board->rook_b;
-    Bitboard* pieceThatMoved = (&board->pawn_w + move.pieceType);
-
-    // Update castling rights
-    if (move.pieceType == KING_W || move.pieceType == KING_B) {
-        board->castling &= board->turn ? ALL_CASTLE_B : ALL_CASTLE_W;
-    } else if (*pieceThatMoved == friendlyRooks) {
-        if (board->turn && move.fromSquare == A1) board->castling &= 0b1101;
-        if (board->turn && move.fromSquare == H1) board->castling &= 0b1110;
-        if (!board->turn && move.fromSquare == A8) board->castling &= 0b0111;
-        if (!board->turn && move.fromSquare == H8) board->castling &= 0b1011;
-    }
-
-    // "Lift up the piece"
-    *pieceThatMoved = toggleBit(*pieceThatMoved, move.fromSquare);
-
-    // If not promotion set the piece square directly
-    if (move.promotion <= 0) {
-        *pieceThatMoved = setBit(*pieceThatMoved, move.toSquare);
-
-        if (*pieceThatMoved == board->king_w) {
-            board->whiteKingSq = move.toSquare;
-        } else if (*pieceThatMoved == board->king_b) {
-            board->blackKingSq = move.toSquare;
-        }
-
+    // Place the piece (or the promoted piece)
+    if (move.promotion < 0) {
+        *moved = bbSet(*moved, move.toSquare);
         board->hash ^= PIECES[move.pieceType][move.toSquare];
+
+        if (move.pieceType == KING_W) board->whiteKingSq = move.toSquare;
+        if (move.pieceType == KING_B) board->blackKingSq = move.toSquare;
     } else {
-        Bitboard* targetMask = &(board->pawn_w) + move.promotion;
-        *targetMask = setBit(*targetMask, move.toSquare);
+        Bitboard *promoBB = pieceBB(board, move.promotion);
+        *promoBB = bbSet(*promoBB, move.toSquare);
         board->hash ^= PIECES[move.promotion][move.toSquare];
     }
 
-    Bitboard* bb = board->turn ? &(board->pawn_b) : &(board->pawn_w);
-    Bitboard opponentRooks = board->turn ? board->rook_b : board->rook_w;
-    for (int i = 0; i < 5; i++) {
-
-        if (getBit(*bb, move.toSquare)) {
-
-            // Update hash
-            board->hash ^= PIECES[(board->turn ? 6 : 0) + i][move.toSquare];
-
-            // Update castling rights if rooks are captured
-            if (*bb == opponentRooks) {
-                if (board->turn && move.toSquare == H8) board->castling &= 0b1011;
-                if (board->turn && move.toSquare == A8) board->castling &= 0b0111;
-                if (!board->turn && move.toSquare == A1) board->castling &= 0b1101;
-                if (!board->turn && move.toSquare == H1) board->castling &= 0b1110;
-            }
-
-            // Remove captured piece
-            *bb = toggleBit(*bb, move.toSquare);
-        }
-        ++bb;
-    }
-
-    // XOR in new castling rights
-    board->hash ^= CASTLING[board->castling];
-
-    // Toggle turn
-    board->turn = board->turn ? 0 : 1;
+    board->turn ^= 1;
     computeOccupancyMasks(board);
 }
 
+// ── insufficient material ─────────────────────────────────────────────────────
+
+static bool insufficientMaterial(Board board) {
+    // If any rook, queen, or pawn exists, there's enough material.
+    if (!bbEmpty(board.pawn_w)  || !bbEmpty(board.pawn_b))  return false;
+    if (!bbEmpty(board.rook_w)  || !bbEmpty(board.rook_b))  return false;
+    if (!bbEmpty(board.queen_w) || !bbEmpty(board.queen_b)) return false;
+    // K vs K, KN vs K, or KB vs K are draws.
+    int minors = bbPopcount(board.knight_w) + bbPopcount(board.knight_b)
+               + bbPopcount(board.bishop_w) + bbPopcount(board.bishop_b);
+    return minors <= 1;
+}
+
+// ── game result ───────────────────────────────────────────────────────────────
+
+int result(Board board, Move legal[], int count) {
+    if (insufficientMaterial(board)) return DRAW;
+    if (count > 0) return UN_DETERMINED;
+
+    // No legal moves: check if the king is in check
+    Bitboard kingSq = board.turn ? SQUARE_BITBOARDS[board.whiteKingSq]
+                                 : SQUARE_BITBOARDS[board.blackKingSq];
+    bool inCheck = !bbEmpty(bbAnd(kingSq, board.attacks));
+    if (inCheck) return board.turn ? BLACK_WIN : WHITE_WIN;
+    return DRAW; // stalemate
+}
+
+// ── debug display ─────────────────────────────────────────────────────────────
+
 void printBoard(Board board) {
-    char pieceSymbols[] = "PNBRQKpnbrqk";
+    const char *symbols = "PNBRQKpnbrqk";
     printf("\n");
-    for (int y = 0; y < 8; y++) {
-        for (int x = 0; x < 8; x++) {
-
-            int loc = 63 - ((y*8) + x);
-            bool printed = false;
-
-            for (int i = 0; i < 12; i++) {
-                Bitboard* bb = ((Bitboard*) &board) + i;                    
-
-                if (getBit(*bb, loc)) {
-                    printf("%c", pieceSymbols[i]);
-                    printed = true;
-                    break;
-                }
+    for (int i = 0; i < NUM_SQUARES; i++) {
+        char c = '.';
+        for (int p = 0; p < 12; p++) {
+            if (bbGet(*pieceBB(&board, p), i)) {
+                c = symbols[p];
+                break;
             }
-
-            if (! printed) putchar('.');
-            printf(" ");
         }
-        printf("\n");
+        printf("%s:%c  ", indexToName(i), c);
+        if ((i + 1) % 11 == 0) printf("\n");
     }
-
-    printf("Turn: %s\n", board.turn ? "White" : "Black");
-    printf("Castling: ");
-    for (int i = 0; i < 4; i++) {
-        if ((board.castling & (1 << i)) >> i) {
-            putchar(CASTLING_RIGHTS[i][0]);
-        }
-    }
-    printf("\nEp square: %s\n", board.epSquare == -1 ? "None" : &SQUARES[board.epSquare][0]);
+    printf("\nTurn: %s\n", board.turn ? "White" : "Black");
+    printf("Ep: %s\n", board.epSquare < 0 ? "-" : indexToName(board.epSquare));
     printf("\n");
 }

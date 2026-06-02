@@ -1,356 +1,87 @@
 #include "evaluation.h"
 #include "board.h"
+#include "coords.h"
+#include <stdlib.h>
 
-// https://www.chessprogramming.org/Piece-Square_Tables
-
-int PIECE_HEAD_VALUES[] = {
-    100,
-    320,
-    330,
-    500,
-    900,
-    2000,
-    -100,
-    -320,
-    -330,
-    -500,
-    -900,
-    -2000};
-
-int PAWN_W_POS[] = {
-    0, 0, 0, 0, 0, 0, 0, 0,
-    5, 10, 10, -20, -20, 10, 10, 5,
-    5, -5, -10, 0, 0, -10, -5, 5,
-    0, 0, 0, 20, 20, 0, 0, 0,
-    5, 5, 10, 25, 25, 10, 5, 5,
-    10, 10, 20, 30, 30, 20, 10, 10,
-    50, 50, 50, 50, 50, 50, 50, 50,
-    0, 0, 0, 0, 0, 0, 0, 0};
-int KNIGHT_W_POS[] = {
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20, 0, 5, 5, 0, -20, -40,
-    -30, 5, 10, 15, 15, 10, 5, -30,
-    -30, 0, 15, 20, 20, 15, 0, -30,
-    -30, 5, 15, 20, 20, 15, 5, -30,
-    -30, 0, 10, 15, 15, 10, 0, -30,
-    -40, -20, 0, 0, 0, 0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50};
-int BISHOP_W_POS[] = {
-
-    -20, -10, -10, -10, -10, -10, -10, -20,
-    -10, 5, 0, 0, 0, 0, 5, -10,
-    -10, 10, 10, 10, 10, 10, 10, -10,
-    -10, 0, 10, 10, 10, 10, 0, -10,
-    -10, 5, 5, 10, 10, 5, 5, -10,
-    -10, 0, 5, 10, 10, 5, 0, -10,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -20, -10, -10, -10, -10, -10, -10, -20};
-int ROOK_W_POS[] = {
-    0,
-    0,
-    5,
-    10,
-    10,
-    5,
-    0,
-    0,
-    -5,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    -5,
-    -5,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    -5,
-    -5,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    -5,
-    -5,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    -5,
-    -5,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    -5,
-    5,
-    10,
-    10,
-    10,
-    10,
-    10,
-    10,
-    5,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-};
-int QUEEN_W_POS[] = {
-    -20,
-    -10,
-    -10,
-    -5,
-    -5,
-    -10,
-    -10,
-    -20 - 10,
-    0,
-    5,
-    0,
-    0,
-    0,
-    0,
-    -10,
-    -10,
-    5,
-    5,
-    5,
-    5,
-    5,
-    0,
-    -10,
-    0,
-    0,
-    5,
-    5,
-    5,
-    5,
-    0,
-    -5,
-    -5,
-    0,
-    5,
-    5,
-    5,
-    5,
-    0,
-    -5,
-    -10,
-    0,
-    5,
-    5,
-    5,
-    5,
-    0,
-    -10,
-    -10,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    -10,
-    -20,
-    -10,
-    -10,
-    -5,
-    -5,
-    -10,
-    -10,
-    -20,
-};
-int KING_W_POS[] = {
-    20,
-    30,
-    10,
-    0,
-    0,
-    10,
-    30,
-    20,
-    20,
-    20,
-    0,
-    0,
-    0,
-    0,
-    20,
-    20,
-    -10,
-    -20,
-    -20,
-    -20,
-    -20,
-    -20,
-    -20,
-    -10,
-    -20,
-    -30,
-    -30,
-    -40,
-    -40,
-    -30,
-    -30,
-    -20,
-    -30,
-    -40,
-    -40,
-    -50,
-    -50,
-    -40,
-    -40,
-    -30,
-    -30,
-    -40,
-    -40,
-    -50,
-    -50,
-    -40,
-    -40,
-    -30,
-    -30,
-    -40,
-    -40,
-    -50,
-    -50,
-    -40,
-    -40,
-    -30,
-    -30,
-    -40,
-    -40,
-    -50,
-    -50,
-    -40,
-    -40,
-    -30,
+// Piece material values (centipawns). Black values are negated.
+static const int PIECE_VALUES[12] = {
+    100, 320, 330, 500, 900, 20000,   // white
+   -100,-320,-330,-500,-900,-20000    // black
 };
 
-int KNIGHT_B_POS[64];
-int PAWN_B_POS[64];
-int BISHOP_B_POS[64];
-int ROOK_B_POS[64];
-int QUEEN_B_POS[64];
-int KING_B_POS[64];
+// Piece-square tables: PST_W[pt][sq] for white, PST_B[pt][sq] for black.
+// White bonuses are positive (good for white), black bonuses are negative
+// (good for black). Built by initEvaluation() from cube coordinates.
+static int PST_W[6][NUM_SQUARES];
+static int PST_B[6][NUM_SQUARES];
 
-int MIN_EVAL = -1000000;
-int MAX_EVAL = 1000000;
+// Knight bonus by hex distance from center (0..5).
+static const int KNIGHT_DIST[6] = { 30, 20, 10, 0, -15, -30 };
 
-void initEvaluation(void)
-{
-    for (int i = 0; i < 64; i++)
-    { // Black evaluation is reverse of white
-        PAWN_B_POS[i] = PAWN_W_POS[63 - i];
-        KNIGHT_B_POS[i] = KNIGHT_W_POS[63 - i];
-        BISHOP_B_POS[i] = BISHOP_W_POS[63 - i];
-        ROOK_B_POS[i] = ROOK_W_POS[63 - i];
-        QUEEN_B_POS[i] = QUEEN_W_POS[63 - i];
-        KING_B_POS[i] = KING_W_POS[63 - i];
+// Bishop bonus by hex distance from center.
+static const int BISHOP_DIST[6] = { 20, 12, 6, 0, -5, -10 };
+
+// Queen bonus by hex distance from center (small — don't encourage early development).
+static const int QUEEN_DIST[6] = { 10, 5, 2, 0, 0, 0 };
+
+// King safety: prefer edges (no game-phase detection yet).
+static const int KING_DIST[6] = { -40, -20, -5, 5, 15, 20 };
+
+void initEvaluation(void) {
+    for (int sq = 0; sq < NUM_SQUARES; sq++) {
+        int q = CELLS[sq].q;
+        int r = CELLS[sq].r;
+        int s = CELLS[sq].s;
+        int dist = (abs(q) + abs(r) + abs(s)) / 2;
+
+        // Pawn: reward advancement (r increases toward black's side) + central file.
+        PST_W[0][sq] = r * 8 + (HEX_RADIUS - abs(q)) * 3;
+
+        // Knight: strong central bonus, penalise rim.
+        PST_W[1][sq] = KNIGHT_DIST[dist];
+
+        // Bishop: moderate central bonus.
+        PST_W[2][sq] = BISHOP_DIST[dist];
+
+        // Rook: small advancement + small central-file bonus.
+        PST_W[3][sq] = r * 2 + (HEX_RADIUS - abs(q)) * 2;
+
+        // Queen: small central bonus.
+        PST_W[4][sq] = QUEEN_DIST[dist];
+
+        // King: prefer edges for safety.
+        PST_W[5][sq] = KING_DIST[dist];
+    }
+
+    // Black tables: 180° point reflection through center maps (q,r,s) -> (-q,-r,-s).
+    // Values are negated so the sign convention matches PIECE_VALUES (black = negative).
+    for (int pt = 0; pt < 6; pt++) {
+        for (int sq = 0; sq < NUM_SQUARES; sq++) {
+            int msq = cubeToIndex(-CELLS[sq].q, -CELLS[sq].r, -CELLS[sq].s);
+            PST_B[pt][sq] = -PST_W[pt][msq];
+        }
     }
 }
 
-int evaluate(Board board, int result)
-{
-    if (result == DRAW)
-        return 0;
-    else if (result == WHITE_WIN)
-        return MAX_EVAL;
-    else if (result == BLACK_WIN)
-        return MIN_EVAL;
+int evaluate(Board board, int gameResult) {
+    if (gameResult == WHITE_WIN) return  MAX_EVAL;
+    if (gameResult == BLACK_WIN) return  MIN_EVAL;
+    if (gameResult == DRAW)      return  0;
 
-    int eval = 0;
-
-    while (board.pawn_w)
-    {
-        int sq = __builtin_ctzll(board.pawn_w);
-        eval += PAWN_W_POS[sq];
-        eval += PIECE_HEAD_VALUES[PAWN_W];
-        board.pawn_w &= board.pawn_w - 1;
+    int score = 0;
+    for (int p = 0; p < 6; p++) {
+        Bitboard wb = *pieceBB(&board, p);
+        while (!bbEmpty(wb)) {
+            int sq = bbLsb(wb);
+            score += PIECE_VALUES[p] + PST_W[p][sq];
+            wb = bbClear(wb, sq);
+        }
+        Bitboard bb = *pieceBB(&board, p + 6);
+        while (!bbEmpty(bb)) {
+            int sq = bbLsb(bb);
+            score += PIECE_VALUES[p + 6] + PST_B[p][sq];
+            bb = bbClear(bb, sq);
+        }
     }
-    while (board.knight_w)
-    {
-        int sq = __builtin_ctzll(board.knight_w);
-        eval += KNIGHT_W_POS[sq];
-        eval += PIECE_HEAD_VALUES[KNIGHT_W];
-        board.knight_w &= board.knight_w - 1;
-    }
-    while (board.bishop_w)
-    {
-        int sq = __builtin_ctzll(board.bishop_w);
-        eval += BISHOP_W_POS[sq];
-        eval += PIECE_HEAD_VALUES[BISHOP_W];
-        board.bishop_w &= board.bishop_w - 1;
-    }
-    while (board.rook_w)
-    {
-        int sq = __builtin_ctzll(board.rook_w);
-        eval += ROOK_W_POS[sq];
-        eval += PIECE_HEAD_VALUES[ROOK_W];
-        board.rook_w &= board.rook_w - 1;
-    }
-    while (board.queen_w)
-    {
-        int sq = __builtin_ctzll(board.queen_w);
-        eval += QUEEN_W_POS[sq];
-        eval += PIECE_HEAD_VALUES[QUEEN_W];
-        board.queen_w &= board.queen_w - 1;
-    }
-    while (board.pawn_b)
-    {
-        int sq = __builtin_ctzll(board.pawn_b);
-        eval -= PAWN_B_POS[sq];
-        eval += PIECE_HEAD_VALUES[PAWN_B];
-        board.pawn_b &= board.pawn_b - 1;
-    }
-    while (board.knight_b)
-    {
-        int sq = __builtin_ctzll(board.knight_b);
-        eval -= KNIGHT_B_POS[sq];
-        eval += PIECE_HEAD_VALUES[KNIGHT_B];
-        board.knight_b &= board.knight_b - 1;
-    }
-    while (board.bishop_b)
-    {
-        int sq = __builtin_ctzll(board.bishop_b);
-        eval -= BISHOP_B_POS[sq];
-        eval += PIECE_HEAD_VALUES[BISHOP_B];
-        board.bishop_b &= board.bishop_b - 1;
-    }
-    while (board.rook_b)
-    {
-        int sq = __builtin_ctzll(board.rook_b);
-        eval -= ROOK_B_POS[sq];
-        eval += PIECE_HEAD_VALUES[ROOK_B];
-        board.rook_b &= board.rook_b - 1;
-    }
-    while (board.queen_b)
-    {
-        int sq = __builtin_ctzll(board.queen_b);
-        eval -= QUEEN_B_POS[sq];
-        eval += PIECE_HEAD_VALUES[QUEEN_B];
-        board.queen_b &= board.queen_b - 1;
-    }
-
-    // King square bonuses
-    eval += KING_W_POS[board.whiteKingSq];
-    eval -= KING_B_POS[board.blackKingSq];
-
-    return eval;
+    return score;
 }

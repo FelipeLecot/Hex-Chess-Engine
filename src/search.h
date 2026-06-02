@@ -3,9 +3,14 @@
 
 #include "typedefs.h"
 
-extern int SEARCH_NODES_SEARCHED;
-extern Move SEARCH_BEST_MOVE;
+typedef struct {
+    int  nodesSearched;
+    Move bestMove;
+    int  maxDepth;
+} SearchContext;
 
-int search(Board board, int depth);
+// Runs alpha-beta search to the given depth.
+// Fills ctx->bestMove and ctx->nodesSearched. Returns evaluation (white-positive).
+int search(Board board, int depth, SearchContext *ctx);
 
 #endif
