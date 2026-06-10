@@ -140,7 +140,7 @@ static int addMove(Move moves[], int len, int from, int to, int promo, int ptype
 
 // Gliński's pawn rules:
 //   - Forward: one step in (0,+1,-1) for white, (0,-1,+1) for black.
-//   - Double push only from the starting rank (rank 2 for white, rank max-1 for black).
+//   - Double push only from the starting rank (r==-1 for q≤0, r==-q-1 for q>0 for white; mirrored for black).
 //   - Captures: the two rook-adjacent squares that flank the forward direction:
 //       white captures via (+1,0,-1) and (-1,+1,0)
 //       black captures via (+1,-1,0) and (-1,0,+1)
@@ -150,17 +150,6 @@ static int addMove(Move moves[], int len, int from, int to, int promo, int ptype
 static const int PAWN_CAPS_W[2][3] = {{ 1, 0,-1},{-1, 1, 0}};
 static const int PAWN_CAPS_B[2][3] = {{ 1,-1, 0},{-1, 0, 1}};
 
-// Returns the minimum r for a given q (lowest rank of the file).
-static int minRank(int q) {
-    int a = -HEX_RADIUS, b = -HEX_RADIUS - q;
-    return a > b ? a : b;
-}
-
-// Returns the maximum r for a given q (highest rank of the file).
-static int maxRank(int q) {
-    int a = HEX_RADIUS, b = HEX_RADIUS - q;
-    return a < b ? a : b;
-}
 
 static int pawnMoves(Board *board, int sq, bool isWhite, Move moves[], int len) {
     Cell *c = &CELLS[sq];
@@ -189,10 +178,11 @@ static int pawnMoves(Board *board, int sq, bool isWhite, Move moves[], int len) 
             len = addMove(moves, len, sq, fwd, NO_PIECE, ptype);
 
             // ── double push from starting rank only ───────────────────────────
-            // White starting rank: r == minRank(q) + 1 (rank 2 of the file).
-            // Black starting rank: r == maxRank(q) - 1 (second-from-top of the file).
-            bool onStart = isWhite ? (c->r == minRank(c->q) + 1)
-                                   : (c->r == maxRank(c->q) - 1);
+            // White start: r == (q<0 ? -1 : -q-1).  Black start: r == (q>0 ? 1 : 1-q).
+            // Derived from the actual starting positions: white pawns always land on
+            // the row r=-1 for files q≤0, and r=-q-1 for files q>0; black is mirrored.
+            bool onStart = isWhite ? (c->r == (c->q < 0 ? -1 : -c->q - 1))
+                                   : (c->r == (c->q > 0 ?  1 :  1 - c->q));
             if (onStart) {
                 int dbl = cubeToIndex(c->q, c->r + fdr*2, c->s + fds*2);
                 if (dbl >= 0 && !bbGet(board->occupancy, dbl))
