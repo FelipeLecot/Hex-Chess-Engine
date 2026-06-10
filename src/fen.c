@@ -46,6 +46,56 @@ static int fileRankToIndex(int col, int rank_1based) {
     return cubeToIndex(q, r, s);
 }
 
+void getFen(Board board, char *buf) {
+    int pos = 0;
+
+    for (int col = 0; col < 11; col++) {
+        if (col > 0) buf[pos++] = '/';
+
+        int q    = col - HEX_RADIUS;
+        int rmin = (-HEX_RADIUS > -HEX_RADIUS - q) ? -HEX_RADIUS : -HEX_RADIUS - q;
+        int rmax = ( HEX_RADIUS < HEX_RADIUS  - q) ?  HEX_RADIUS :  HEX_RADIUS  - q;
+        int empty = 0;
+
+        for (int rank = 1; rank <= rmax - rmin + 1; rank++) {
+            int r   = rmin + (rank - 1);
+            int s   = -q - r;
+            int idx = cubeToIndex(q, r, s);
+
+            int piece = NO_PIECE;
+            for (int i = 0; i < 12; i++) {
+                if (bbGet(*pieceBB(&board, i), idx)) { piece = i; break; }
+            }
+
+            if (piece == NO_PIECE) {
+                empty++;
+            } else {
+                if (empty >= 10) { buf[pos++] = '1'; buf[pos++] = (char)('0' + empty - 10); }
+                else if (empty > 0) buf[pos++] = (char)('0' + empty);
+                empty = 0;
+                buf[pos++] = PIECE_CHARS[piece];
+            }
+        }
+
+        if (empty >= 10) { buf[pos++] = '1'; buf[pos++] = (char)('0' + empty - 10); }
+        else if (empty > 0) buf[pos++] = (char)('0' + empty);
+    }
+
+    buf[pos++] = ' ';
+    buf[pos++] = (board.turn == WHITE) ? 'w' : 'b';
+    buf[pos++] = ' ';
+
+    if (board.epSquare < 0) {
+        buf[pos++] = '-';
+    } else {
+        const char *name = indexToName(board.epSquare);
+        while (*name) buf[pos++] = *name++;
+    }
+
+    pos += sprintf(buf + pos, " %d %d", board.halfmoves, board.fullmoves);
+    buf[pos] = '\0';
+}
+
 void setFen(Board *board, const char *fen) {
     resetBoard(board);
 

@@ -137,6 +137,11 @@ int main(void) {
             parsePosition(input, &board);
         } else if (strncmp(input, "go", 2) == 0) {
             parseGo(input, board);
+        } else if (strncmp(input, "fen", 3) == 0) {
+            char buf[256];
+            getFen(board, buf);
+            printf("%s\n", buf);
+            fflush(stdout);
         } else if (strncmp(input, "display", 7) == 0) {
             renderBoard(board);
         } else if (strncmp(input, "quit", 4) == 0) {

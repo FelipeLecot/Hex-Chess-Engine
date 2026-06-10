@@ -12,4 +12,8 @@
 
 void setFen(Board *board, const char *fen);
 
+// Serialise *board into a NUL-terminated FEN string written to buf.
+// buf must be at least 256 bytes.
+void getFen(Board board, char *buf);
+
 #endif
