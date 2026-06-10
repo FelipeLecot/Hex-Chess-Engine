@@ -61,17 +61,17 @@ quit
 
 ### Supported commands
 
-| Command | Description | Type |
+| Command | Description | Standard UCI |
 |---|---|---|
-| `uci` | Identify the engine | UCI |
-| `isready` | Confirm engine is ready | UCI |
-| `ucinewgame` | Reset to the starting position | UCI |
-| `position startpos [moves m1 m2 ...]` | Set position from start, with optional move list | UCI |
-| `position fen <fen> [moves ...]` | Set position from a FEN string | UCI |
-| `go [depth N]` | Search to depth N (default 5, max 64) | UCI |
-| `fen` | Print the current position as a FEN string | Custom |
-| `display` | Print the current board | Custom |
-| `quit` | Exit | UCI |
+| `uci` | Identify the engine | Yes |
+| `isready` | Confirm engine is ready | Yes |
+| `ucinewgame` | Reset to the starting position | Yes |
+| `position startpos [moves m1 m2 ...]` | Set position from start, with optional move list | Yes |
+| `position fen <fen> [moves ...]` | Set position from a FEN string | Yes |
+| `go [depth N]` | Search to depth N (default 5, max 64) | Yes |
+| `fen` | Print the current position as a FEN string | No |
+| `display` | Print the current board | No |
+| `quit` | Exit | Yes |
 
 Moves use hex square notation `a1`–`l11` (e.g. `f4f5` moves the piece on f4 to f5).
 
