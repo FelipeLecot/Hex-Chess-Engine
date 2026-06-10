@@ -65,11 +65,10 @@ static inline int bbPopcount(Bitboard b) {
     return __builtin_popcountll(b.lo) + __builtin_popcountll(b.hi);
 }
 
-// Index of the least-significant set bit, or -1 if the board is empty.
+// Index of the least-significant set bit. Caller must guarantee b is non-empty.
 static inline int bbLsb(Bitboard b) {
     if (b.lo) return __builtin_ctzll(b.lo);
-    if (b.hi) return 64 + __builtin_ctzll(b.hi);
-    return -1;
+    return 64 + __builtin_ctzll(b.hi);
 }
 
 #endif
